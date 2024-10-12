@@ -1,0 +1,48 @@
+name: auto_scroll_row
+description: "A widget that automatically scrolls a row of items."
+version: 0.0.1
+repository: https://github.com/mustafa-707/auto_scroll_row
+issue_tracker: https://github.com/mustafa-707/auto_scroll_row/issues
+
+environment:
+  sdk: ^3.5.3
+  flutter: ">=1.17.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+
+flutter:
+  uses-material-design: true
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
