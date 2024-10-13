@@ -28,7 +28,8 @@ class AutoScrollRow extends StatefulWidget {
   State<AutoScrollRow> createState() => _AutoScrollRowState();
 }
 
-class _AutoScrollRowState extends State<AutoScrollRow> with SingleTickerProviderStateMixin {
+class _AutoScrollRowState extends State<AutoScrollRow>
+    with SingleTickerProviderStateMixin {
   late final ScrollController _scrollController;
   late final AnimationController _controller;
   bool isDragging = false;
@@ -60,7 +61,8 @@ class _AutoScrollRowState extends State<AutoScrollRow> with SingleTickerProvider
         final scrollValue = maxScroll * _controller.value;
 
         // Adjust scroll based on reverse flag: scroll right-to-left if reverse is true
-        final adjustedScrollValue = widget.reverse ? maxScroll - scrollValue : scrollValue;
+        final adjustedScrollValue =
+            widget.reverse ? maxScroll - scrollValue : scrollValue;
 
         // Jump to the calculated scroll position or reset to 0 if the end is reached
         if (adjustedScrollValue < maxScroll) {
@@ -101,7 +103,8 @@ class _AutoScrollRowState extends State<AutoScrollRow> with SingleTickerProvider
               double animationValue = currentScrollPosition / maxScroll;
 
               // Adjust the animation value if the reverse flag is set
-              _controller.value = widget.reverse ? 1 - animationValue : animationValue;
+              _controller.value =
+                  widget.reverse ? 1 - animationValue : animationValue;
 
               _controller.repeat();
               isDragging = false;
