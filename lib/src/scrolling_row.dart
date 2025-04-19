@@ -23,12 +23,18 @@ class AutoScrollRow extends StatefulWidget {
   /// If set to `true` (default), the user can interact and stop the automatic scroll by dragging.
   final bool enableUserScroll;
 
+  /// Controls whether the animation should reverse at the end or reset to the beginning.
+  /// If true, the animation will reverse direction at the ends instead of jumping back to the start.
+  /// Defaults to `true` for ping-pong animation style.
+  final bool reverseAtEnds;
+
   /// Constructor for providing a list of widgets directly.
   const AutoScrollRow({
     this.children,
     this.reverse = false,
     this.scrollDuration = const Duration(minutes: 30),
     this.enableUserScroll = true,
+    this.reverseAtEnds = true,
     Key? key,
   })  : itemBuilder = null,
         itemCount = null,
@@ -43,6 +49,7 @@ class AutoScrollRow extends StatefulWidget {
     this.reverse = false,
     this.scrollDuration = const Duration(minutes: 30),
     this.enableUserScroll = true,
+    this.reverseAtEnds = true,
     Key? key,
   })  : children = null,
         assert(itemBuilder != null && itemCount != null,
@@ -58,13 +65,14 @@ class _AutoScrollRowState extends State<AutoScrollRow>
   late final ScrollController _scrollController;
   late final AnimationController _controller;
   bool isDragging = false;
+  bool isForward = true; // Track current animation direction
 
   @override
   void initState() {
     super.initState();
     _scrollController = ScrollController();
 
-    // Create an animation controller with the duration provided by the user
+    // Configure the animation controller
     _controller = AnimationController(
       vsync: this,
       duration: widget.scrollDuration,
@@ -77,31 +85,49 @@ class _AutoScrollRowState extends State<AutoScrollRow>
   }
 
   /// Starts the automatic scrolling of the row.
-  /// The animation controller drives the scroll, and it repeats indefinitely.
   void _startScrolling() {
-    _controller.repeat();
+    if (widget.reverseAtEnds) {
+      // Use forward-backward animation for ping-pong effect
+      _controller.addStatusListener((status) {
+        if (status == AnimationStatus.completed) {
+          _controller.reverse();
+          isForward = false;
+        } else if (status == AnimationStatus.dismissed) {
+          _controller.forward();
+          isForward = true;
+        }
+      });
+      _controller.forward();
+    } else {
+      // Use repeat for looping from start
+      _controller.repeat();
+    }
+
     _controller.addListener(() {
       if (_scrollController.hasClients && !isDragging) {
         final maxScroll = _scrollController.position.maxScrollExtent;
-        final scrollValue = maxScroll * _controller.value;
+        double scrollValue;
 
-        // Adjust scroll based on reverse flag: scroll right-to-left if reverse is true
+        if (widget.reverseAtEnds) {
+          // Calculate proper scroll position for ping-pong effect
+          scrollValue = maxScroll * _controller.value;
+        } else {
+          // Original looping behavior
+          scrollValue = maxScroll * _controller.value;
+        }
+
+        // Adjust scroll based on reverse flag (right-to-left vs left-to-right)
         final adjustedScrollValue =
             widget.reverse ? maxScroll - scrollValue : scrollValue;
 
-        // Jump to the calculated scroll position or reset to 0 if the end is reached
-        if (adjustedScrollValue < maxScroll) {
-          _scrollController.jumpTo(adjustedScrollValue);
-        } else {
-          _scrollController.jumpTo(0);
-        }
+        // Apply the calculated scroll position
+        _scrollController.jumpTo(adjustedScrollValue);
       }
     });
   }
 
   @override
   void dispose() {
-    // Dispose of the animation and scroll controllers to avoid memory leaks
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -126,9 +152,24 @@ class _AutoScrollRowState extends State<AutoScrollRow>
       if (maxScroll <= 0) animationValue = 0; // Avoid division by zero
 
       // Adjust the animation value if the reverse flag is set
-      _controller.value = widget.reverse ? 1 - animationValue : animationValue;
+      if (widget.reverse) {
+        animationValue = 1 - animationValue;
+      }
 
-      _controller.repeat();
+      _controller.value = animationValue;
+
+      if (widget.reverseAtEnds) {
+        // Resume animation in the correct direction based on where we are
+        if (isForward) {
+          _controller.forward();
+        } else {
+          _controller.reverse();
+        }
+      } else {
+        // Original looping behavior
+        _controller.repeat();
+      }
+
       isDragging = false;
     }
   }

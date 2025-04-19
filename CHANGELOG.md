@@ -1,5 +1,9 @@
 # CHANGES
 
+## 0.0.4
+
+- add reverseAtEnds as default behavior.
+
 ## 0.0.3
 
 - add builder version.

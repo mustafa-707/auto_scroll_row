@@ -97,7 +97,7 @@ class ExamplesScreen extends StatelessWidget {
               ),
               child: AutoScrollRow.builder(
                 itemCount:
-                    100, // Large number of items to demonstrate efficiency
+                    50, // Large number of items to demonstrate efficiency
                 scrollDuration: const Duration(minutes: 10),
                 reverse: true, // Scrolling from right to left
                 enableUserScroll: true,
