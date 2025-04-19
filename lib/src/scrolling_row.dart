@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 
 class AutoScrollRow extends StatefulWidget {
   /// The list of widgets to be displayed in the scrolling row.
-  final List<Widget> children;
+  final List<Widget>? children;
+
+  /// A builder function that returns widgets on demand.
+  final IndexedWidgetBuilder? itemBuilder;
+
+  /// The total number of items when using a builder.
+  final int? itemCount;
 
   /// Determines if the scroll direction should be reversed (right to left).
   /// Defaults to `false`, meaning the scroll direction is left to right.
@@ -16,13 +23,31 @@ class AutoScrollRow extends StatefulWidget {
   /// If set to `true` (default), the user can interact and stop the automatic scroll by dragging.
   final bool enableUserScroll;
 
+  /// Constructor for providing a list of widgets directly.
   const AutoScrollRow({
-    required this.children,
+    this.children,
     this.reverse = false,
     this.scrollDuration = const Duration(minutes: 30),
     this.enableUserScroll = true,
     Key? key,
-  }) : super(key: key);
+  })  : itemBuilder = null,
+        itemCount = null,
+        assert(children != null,
+            'Children must not be null when using this constructor'),
+        super(key: key);
+
+  /// Constructor for using a builder pattern to efficiently render only visible items.
+  const AutoScrollRow.builder({
+    required this.itemBuilder,
+    required this.itemCount,
+    this.reverse = false,
+    this.scrollDuration = const Duration(minutes: 30),
+    this.enableUserScroll = true,
+    Key? key,
+  })  : children = null,
+        assert(itemBuilder != null && itemCount != null,
+            'ItemBuilder and itemCount must not be null when using builder constructor'),
+        super(key: key);
 
   @override
   State<AutoScrollRow> createState() => _AutoScrollRowState();
@@ -82,45 +107,70 @@ class _AutoScrollRowState extends State<AutoScrollRow>
     super.dispose();
   }
 
+  // Handle user scroll interaction start
+  void _handleDragStart() {
+    if (widget.enableUserScroll && !isDragging) {
+      _controller.stop();
+      isDragging = true;
+    }
+  }
+
+  // Handle user scroll interaction end
+  void _handleDragEnd() {
+    if (widget.enableUserScroll && isDragging) {
+      double currentScrollPosition = _scrollController.position.pixels;
+      double maxScroll = _scrollController.position.maxScrollExtent;
+
+      // Calculate the position within the animation based on the current scroll
+      double animationValue = currentScrollPosition / maxScroll;
+      if (maxScroll <= 0) animationValue = 0; // Avoid division by zero
+
+      // Adjust the animation value if the reverse flag is set
+      _controller.value = widget.reverse ? 1 - animationValue : animationValue;
+
+      _controller.repeat();
+      isDragging = false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return NotificationListener<ScrollNotification>(
-      onNotification: (notification) {
-        if (widget.enableUserScroll && notification is UserScrollNotification) {
-          // If the user starts dragging, stop the auto-scrolling
-          if (_scrollController.position.isScrollingNotifier.value) {
-            if (!isDragging) {
-              _controller.stop();
-              isDragging = true;
-            }
-          } else {
-            // If the user stops dragging, resume the auto-scrolling from the current position
-            if (isDragging) {
-              double currentScrollPosition = _scrollController.position.pixels;
-              double maxScroll = _scrollController.position.maxScrollExtent;
+    return GestureDetector(
+      // Explicitly handle drag gestures for reliable interaction
+      onHorizontalDragStart: (_) => _handleDragStart(),
+      onHorizontalDragEnd: (_) => _handleDragEnd(),
 
-              // Calculate the position within the animation based on the current scroll
-              double animationValue = currentScrollPosition / maxScroll;
-
-              // Adjust the animation value if the reverse flag is set
-              _controller.value =
-                  widget.reverse ? 1 - animationValue : animationValue;
-
-              _controller.repeat();
-              isDragging = false;
-            }
-          }
-        }
-        return false;
-      },
-      // The row of widgets is placed inside a horizontally scrolling container
-      child: SingleChildScrollView(
-        controller: _scrollController,
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: widget.children,
+      // Use Listener to catch all pointer events
+      child: Listener(
+        onPointerDown: (_) => _handleDragStart(),
+        onPointerUp: (_) => _handleDragEnd(),
+        onPointerCancel: (_) => _handleDragEnd(),
+        child: SingleChildScrollView(
+          controller: _scrollController,
+          scrollDirection: Axis.horizontal,
+          physics: widget.enableUserScroll
+              ? const ClampingScrollPhysics()
+              : const NeverScrollableScrollPhysics(),
+          dragStartBehavior: DragStartBehavior.down,
+          child: _buildContent(),
         ),
       ),
     );
+  }
+
+  /// Builds either a simple Row with children or creates widgets using the builder pattern
+  Widget _buildContent() {
+    if (widget.children != null) {
+      // Original implementation with direct children
+      return Row(children: widget.children!);
+    } else {
+      // Create a row dynamically using itemBuilder
+      return Row(
+        children: List.generate(
+          widget.itemCount!,
+          (index) => widget.itemBuilder!(context, index),
+        ),
+      );
+    }
   }
 }
