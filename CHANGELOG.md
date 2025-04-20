@@ -1,5 +1,9 @@
 # CHANGES
 
+## 0.0.5
+
+- add pauseDuration with default 3s for pause animation when user scroll.
+
 ## 0.0.4
 
 - add reverseAtEnds as default behavior.

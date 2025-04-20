@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import 'dart:async';
 
 class AutoScrollRow extends StatefulWidget {
   /// The list of widgets to be displayed in the scrolling row.
@@ -28,6 +29,10 @@ class AutoScrollRow extends StatefulWidget {
   /// Defaults to `true` for ping-pong animation style.
   final bool reverseAtEnds;
 
+  /// Duration to pause scrolling after user interaction before auto-resuming.
+  /// Defaults to 3 seconds.
+  final Duration pauseDuration;
+
   /// Constructor for providing a list of widgets directly.
   const AutoScrollRow({
     this.children,
@@ -35,6 +40,7 @@ class AutoScrollRow extends StatefulWidget {
     this.scrollDuration = const Duration(minutes: 30),
     this.enableUserScroll = true,
     this.reverseAtEnds = true,
+    this.pauseDuration = const Duration(seconds: 3),
     Key? key,
   })  : itemBuilder = null,
         itemCount = null,
@@ -50,6 +56,7 @@ class AutoScrollRow extends StatefulWidget {
     this.scrollDuration = const Duration(minutes: 30),
     this.enableUserScroll = true,
     this.reverseAtEnds = true,
+    this.pauseDuration = const Duration(seconds: 3),
     Key? key,
   })  : children = null,
         assert(itemBuilder != null && itemCount != null,
@@ -66,6 +73,7 @@ class _AutoScrollRowState extends State<AutoScrollRow>
   late final AnimationController _controller;
   bool isDragging = false;
   bool isForward = true; // Track current animation direction
+  Timer? _pauseTimer; // Timer to track pause duration
 
   @override
   void initState() {
@@ -128,6 +136,7 @@ class _AutoScrollRowState extends State<AutoScrollRow>
 
   @override
   void dispose() {
+    _pauseTimer?.cancel();
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -144,6 +153,7 @@ class _AutoScrollRowState extends State<AutoScrollRow>
   // Handle user scroll interaction end
   void _handleDragEnd() {
     if (widget.enableUserScroll && isDragging) {
+      // Calculate the current animation position
       double currentScrollPosition = _scrollController.position.pixels;
       double maxScroll = _scrollController.position.maxScrollExtent;
 
@@ -158,19 +168,28 @@ class _AutoScrollRowState extends State<AutoScrollRow>
 
       _controller.value = animationValue;
 
-      if (widget.reverseAtEnds) {
-        // Resume animation in the correct direction based on where we are
-        if (isForward) {
-          _controller.forward();
-        } else {
-          _controller.reverse();
-        }
-      } else {
-        // Original looping behavior
-        _controller.repeat();
-      }
+      // Cancel any existing pause timer
+      _pauseTimer?.cancel();
 
-      isDragging = false;
+      // Set a timer to resume animation after pauseDuration
+      _pauseTimer = Timer(widget.pauseDuration, () {
+        if (mounted) {
+          // Resume animation in the correct direction
+          if (widget.reverseAtEnds) {
+            if (isForward) {
+              _controller.forward();
+            } else {
+              _controller.reverse();
+            }
+          } else {
+            // Original looping behavior
+            _controller.repeat();
+          }
+
+          // Clear dragging state
+          isDragging = false;
+        }
+      });
     }
   }
 
