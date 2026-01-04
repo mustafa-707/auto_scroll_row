@@ -1,6 +1,6 @@
 name: auto_scroll_row
 description: "A widget that automatically scrolls a row of items."
-version: 0.0.7
+version: 0.0.6
 repository: https://github.com/mustafa-707/auto_scroll_row
 issue_tracker: https://github.com/mustafa-707/auto_scroll_row/issues
 

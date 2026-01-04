@@ -1,13 +1,10 @@
 # CHANGES
 
-## 0.0.7
-
-- fix issues with nullable items.
-- fix issues with 120hz frame rate.
-
 ## 0.0.6
 
 - add separated builder version.
+- fix issues with nullable items.
+- fix issues with 120hz frame rate.
 
 ## 0.0.5
 
