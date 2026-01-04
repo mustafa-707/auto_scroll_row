@@ -1,5 +1,14 @@
 # CHANGES
 
+## 0.0.7
+
+- fix issues with nullable items.
+- fix issues with 120hz frame rate.
+
+## 0.0.6
+
+- add separated builder version.
+
 ## 0.0.5
 
 - add pauseDuration with default 3s for pause animation when user scroll.

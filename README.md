@@ -73,6 +73,27 @@ AutoScrollRow.builder(
 ),
 ```
 
+### Separated Constructor
+
+When you need to place a widget between items (e.g., a divider or spacing), use the `separated` constructor:
+
+```dart
+AutoScrollRow.separated(
+  itemCount: 100,  
+  itemBuilder: (context, index) => Container(
+    width: 100,
+    height: 100,
+    color: Colors.green,
+    child: Center(child: Text('Item $index')),
+  ),
+  // Add a divider or spacing widget between items
+  separatorBuilder: (context, index) => const SizedBox(width: 10),
+  scrollDuration: const Duration(minutes: 10),
+  reverse: false,
+  enableUserScroll: true,
+),
+```
+
 ## Additional information
 
 ### Standard Constructor Parameters
@@ -89,6 +110,13 @@ AutoScrollRow.builder(
 - **`scrollDuration`**: Controls the speed of scrolling. Default is 30 minutes for a full cycle.
 - **`reverse`**: Set to `true` for right-to-left scrolling.
 - **`enableUserScroll`**: Enable or disable user control over scrolling.
+
+### Separated Constructor Parameters
+
+- **`itemBuilder`**: Function that builds item widgets.
+- **`separatorBuilder`**: Function that builds separator widgets between items.
+- **`itemCount`**: Total number of items (separators will be one less than items).
+- **`scrollDuration`**, **`reverse`**, **`enableUserScroll`**: Same as above.
 
 ### User Interaction
 

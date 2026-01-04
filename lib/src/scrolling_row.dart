@@ -9,6 +9,9 @@ class AutoScrollRow extends StatefulWidget {
   /// A builder function that returns widgets on demand.
   final IndexedWidgetBuilder? itemBuilder;
 
+  /// A builder function that returns a separator widget.
+  final IndexedWidgetBuilder? separatorBuilder;
+
   /// The total number of items when using a builder.
   final int? itemCount;
 
@@ -44,6 +47,7 @@ class AutoScrollRow extends StatefulWidget {
     Key? key,
   })  : itemBuilder = null,
         itemCount = null,
+        separatorBuilder = null,
         assert(children != null,
             'Children must not be null when using this constructor'),
         super(key: key);
@@ -59,32 +63,43 @@ class AutoScrollRow extends StatefulWidget {
     this.pauseDuration = const Duration(seconds: 3),
     Key? key,
   })  : children = null,
+        separatorBuilder = null,
         assert(itemBuilder != null && itemCount != null,
             'ItemBuilder and itemCount must not be null when using builder constructor'),
+        super(key: key);
+
+  /// Constructor for using a builder pattern with separators.
+  const AutoScrollRow.separated({
+    required this.itemBuilder,
+    required this.itemCount,
+    required this.separatorBuilder,
+    this.reverse = false,
+    this.scrollDuration = const Duration(minutes: 30),
+    this.enableUserScroll = true,
+    this.reverseAtEnds = true,
+    this.pauseDuration = const Duration(seconds: 3),
+    Key? key,
+  })  : children = null,
+        assert(
+            itemBuilder != null &&
+                itemCount != null &&
+                separatorBuilder != null,
+            'ItemBuilder, itemCount, and separatorBuilder must not be null when using separated constructor'),
         super(key: key);
 
   @override
   State<AutoScrollRow> createState() => _AutoScrollRowState();
 }
 
-class _AutoScrollRowState extends State<AutoScrollRow>
-    with SingleTickerProviderStateMixin {
+class _AutoScrollRowState extends State<AutoScrollRow> {
   late final ScrollController _scrollController;
-  late final AnimationController _controller;
   bool isDragging = false;
-  bool isForward = true; // Track current animation direction
   Timer? _pauseTimer; // Timer to track pause duration
 
   @override
   void initState() {
     super.initState();
     _scrollController = ScrollController();
-
-    // Configure the animation controller
-    _controller = AnimationController(
-      vsync: this,
-      duration: widget.scrollDuration,
-    );
 
     // After the first frame is rendered, start the auto-scrolling animation
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -93,51 +108,108 @@ class _AutoScrollRowState extends State<AutoScrollRow>
   }
 
   /// Starts the automatic scrolling of the row.
-  void _startScrolling() {
-    if (widget.reverseAtEnds) {
-      // Use forward-backward animation for ping-pong effect
-      _controller.addStatusListener((status) {
-        if (status == AnimationStatus.completed) {
-          _controller.reverse();
-          isForward = false;
-        } else if (status == AnimationStatus.dismissed) {
-          _controller.forward();
-          isForward = true;
-        }
-      });
-      _controller.forward();
-    } else {
-      // Use repeat for looping from start
-      _controller.repeat();
+  Future<void> _startScrolling() async {
+    // Safety check: ensure scroll controller has clients before starting
+    if (!mounted || !_scrollController.hasClients) {
+      return;
     }
 
-    _controller.addListener(() {
-      if (_scrollController.hasClients && !isDragging) {
+    // Initial setup: If reversing, we might want to start at the end
+    try {
+      if (widget.reverse && _scrollController.offset == 0) {
         final maxScroll = _scrollController.position.maxScrollExtent;
-        double scrollValue;
-
-        if (widget.reverseAtEnds) {
-          // Calculate proper scroll position for ping-pong effect
-          scrollValue = maxScroll * _controller.value;
-        } else {
-          // Original looping behavior
-          scrollValue = maxScroll * _controller.value;
+        if (maxScroll > 0) {
+          _scrollController.jumpTo(maxScroll);
         }
-
-        // Adjust scroll based on reverse flag (right-to-left vs left-to-right)
-        final adjustedScrollValue =
-            widget.reverse ? maxScroll - scrollValue : scrollValue;
-
-        // Apply the calculated scroll position
-        _scrollController.jumpTo(adjustedScrollValue);
       }
-    });
+    } catch (_) {
+      // Ignore errors during initial setup
+    }
+
+    // Continuous scrolling loop
+    while (mounted && !isDragging) {
+      if (!_scrollController.hasClients) return;
+
+      final double maxScroll = _scrollController.position.maxScrollExtent;
+      final double currentScroll = _scrollController.offset;
+
+      if (maxScroll <= 0) {
+        // No scrollable content, wait and retry
+        await Future.delayed(const Duration(seconds: 1));
+        continue;
+      }
+
+      double target = 0;
+      bool shouldJump = false;
+
+      // Determine target based on configuration and current position
+      if (widget.reverse) {
+        // RTL Mode: Natural direction is Max -> 0
+        if (currentScroll <= 0.5) {
+          // At start (0), need to reset to Max
+          if (widget.reverseAtEnds) {
+            target = maxScroll; // Ping-pong: animate back to Max
+          } else {
+            shouldJump = true; // Loop: jump to Max then animate to 0
+            target = 0;
+          }
+        } else {
+          target = 0; // Animate towards 0
+        }
+      } else {
+        // LTR Mode: Natural direction is 0 -> Max
+        if (currentScroll >= maxScroll - 0.5) {
+          // At end (Max), need to reset to 0
+          if (widget.reverseAtEnds) {
+            target = 0; // Ping-pong: animate back to 0
+          } else {
+            shouldJump = true; // Loop: jump to 0 then animate to Max
+            target = maxScroll;
+          }
+        } else {
+          target = maxScroll; // Animate towards Max
+        }
+      }
+
+      // Execute the scroll action
+      if (shouldJump) {
+        try {
+          _scrollController.jumpTo(target == 0 ? maxScroll : 0);
+          // After jump, current position changed, so we proceed to animate to target
+        } catch (_) {}
+      }
+
+      // Calculate duration proportional to distance to maintain constant speed
+      // Since we jumped (if needed), re-read current position
+      final double newCurrent = _scrollController.offset;
+      final double distance = (target - newCurrent).abs();
+
+      if (distance > 1.0) {
+        final Duration duration = maxScroll > 0
+            ? widget.scrollDuration * (distance / maxScroll)
+            : Duration.zero;
+
+        try {
+          // Use linear curve for smooth constant speed
+          await _scrollController.animateTo(
+            target,
+            duration: duration,
+            curve: Curves.linear,
+          );
+        } catch (_) {
+          // If animation is interrupted (e.g. disposal), break loop
+          break;
+        }
+      } else {
+        // Already at target, yield briefly to prevent tight loop
+        await Future.delayed(const Duration(milliseconds: 50));
+      }
+    }
   }
 
   @override
   void dispose() {
     _pauseTimer?.cancel();
-    _controller.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -145,7 +217,12 @@ class _AutoScrollRowState extends State<AutoScrollRow>
   // Handle user scroll interaction start
   void _handleDragStart() {
     if (widget.enableUserScroll && !isDragging) {
-      _controller.stop();
+      // Stop any ongoing animation
+      _scrollController.animateTo(
+        _scrollController.position.pixels,
+        duration: Duration.zero,
+        curve: Curves.linear,
+      );
       isDragging = true;
     }
   }
@@ -153,20 +230,11 @@ class _AutoScrollRowState extends State<AutoScrollRow>
   // Handle user scroll interaction end
   void _handleDragEnd() {
     if (widget.enableUserScroll && isDragging) {
-      // Calculate the current animation position
-      double currentScrollPosition = _scrollController.position.pixels;
-      double maxScroll = _scrollController.position.maxScrollExtent;
-
-      // Calculate the position within the animation based on the current scroll
-      double animationValue = currentScrollPosition / maxScroll;
-      if (maxScroll <= 0) animationValue = 0; // Avoid division by zero
-
-      // Adjust the animation value if the reverse flag is set
-      if (widget.reverse) {
-        animationValue = 1 - animationValue;
+      // Safety checks before resuming
+      if (!_scrollController.hasClients || !mounted) {
+        isDragging = false;
+        return;
       }
-
-      _controller.value = animationValue;
 
       // Cancel any existing pause timer
       _pauseTimer?.cancel();
@@ -174,20 +242,9 @@ class _AutoScrollRowState extends State<AutoScrollRow>
       // Set a timer to resume animation after pauseDuration
       _pauseTimer = Timer(widget.pauseDuration, () {
         if (mounted) {
-          // Resume animation in the correct direction
-          if (widget.reverseAtEnds) {
-            if (isForward) {
-              _controller.forward();
-            } else {
-              _controller.reverse();
-            }
-          } else {
-            // Original looping behavior
-            _controller.repeat();
-          }
-
-          // Clear dragging state
           isDragging = false;
+          // Restart the scrolling from current position
+          _startScrolling();
         }
       });
     }
@@ -199,8 +256,10 @@ class _AutoScrollRowState extends State<AutoScrollRow>
       // Explicitly handle drag gestures for reliable interaction
       onHorizontalDragStart: (_) => _handleDragStart(),
       onHorizontalDragEnd: (_) => _handleDragEnd(),
+      // Also handle drag cancel to prevent stuck state
+      onHorizontalDragCancel: () => _handleDragEnd(),
 
-      // Use Listener to catch all pointer events
+      // Use Listener to catch all pointer events if gesture detector misses
       child: Listener(
         onPointerDown: (_) => _handleDragStart(),
         onPointerUp: (_) => _handleDragEnd(),
@@ -223,11 +282,56 @@ class _AutoScrollRowState extends State<AutoScrollRow>
     if (widget.children != null) {
       // Original implementation with direct children
       return Row(children: widget.children!);
-    } else {
-      // Create a row dynamically using itemBuilder
+    } else if (widget.separatorBuilder != null) {
+      // Separated implementation
+      final int count = widget.itemCount ?? 0;
+
+      // Safety check: handle empty or single item lists
+      if (count == 0) {
+        return const Row(children: []);
+      }
+
+      if (count == 1) {
+        // Only one item, no separators needed
+        return Row(
+          children: [widget.itemBuilder!(context, 0)],
+        );
+      }
+
+      // Generate items with separators
       return Row(
         children: List.generate(
-          widget.itemCount!,
+          count * 2 - 1,
+          (index) {
+            final itemIndex = index ~/ 2;
+            if (index.isEven) {
+              // Safety check: ensure itemIndex is within bounds
+              if (itemIndex < count) {
+                return widget.itemBuilder!(context, itemIndex);
+              }
+              return const SizedBox.shrink();
+            } else {
+              // Safety check: ensure itemIndex is within bounds for separator
+              if (itemIndex < count - 1) {
+                return widget.separatorBuilder!(context, itemIndex);
+              }
+              return const SizedBox.shrink();
+            }
+          },
+        ),
+      );
+    } else {
+      // Create a row dynamically using itemBuilder
+      final int count = widget.itemCount ?? 0;
+
+      // Safety check: handle empty lists
+      if (count == 0) {
+        return const Row(children: []);
+      }
+
+      return Row(
+        children: List.generate(
+          count,
           (index) => widget.itemBuilder!(context, index),
         ),
       );
